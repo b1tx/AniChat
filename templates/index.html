@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../node_modules/element-ui/lib/theme-chalk/index.css"">
+    <title>ChatGPT语音回复</title>
+    <script>
+        var userAvatarPath = '../static/user_avatar.jpg';
+        function getUserAvatarPath() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/get_user_avatar_path', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState == 4 && xhr.status == 200) {
+                    var response = JSON.parse(xhr.responseText);
+                    console.log('Server response:', response);
+                    userAvatarPath = response.user_avatar_path;
+                    if (userAvatarPath) {
+                        document.getElementById('user-avatar').src = '../static/'+userAvatarPath+'/user_avatar.jpg';
+                        console.log('../local/'+userAvatarPath+'/user_avatar.jpg');
+                    } else {
+                        console.error('No user_avatar_path in response');
+                    }
+                }
+            };
+            xhr.send();
+        }
+        getUserAvatarPath(); // 页面加载完成后立即获取用户头像路径
+    </script>
+    
+    <style>
+        #dropdown-menu a:hover {
+            background-color: #ddd;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+        #chat-container {
+            flex: 1;
+            margin-top: 80px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            width: 45%;
+            align-items: center;
+            background-color: darkslategrey;
+        }
+        #chat-history {
+            flex: 1;
+            border: 1px solid #ccc;
+            max-height: 600px;
+            padding: 10px;
+            overflow-y: auto;
+            width: 80%;
+            margin: 0 auto;
+            border-radius: 15px; /* 圆角大小 */
+            background-color: antiquewhite;
+        }
+        .chat-bubble {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .chat-bubble img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .user-bubble {
+            justify-content: flex-end;
+            flex-direction: row-reverse;
+        }
+        .gpt-bubble {
+            justify-content: flex-start;
+        }
+        .chat-bubble-content {
+            background-color: #e5e5e5;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 80%;
+        }
+        .user-bubble .chat-bubble-content {
+            background-color: rgb(130, 214, 130); /* 用户气泡背景色为绿色 */
+        }
+        .gpt-bubble .chat-bubble-content {
+            background-color: rgb(197, 178, 178); /* ChatGPT气泡背景色为白色 */
+        }
+        #input-text {
+            width: 80%;
+            height: 100px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+            border-radius: 15px; /* 圆角大小 */
+            background-color: antiquewhite;
+        }
+        #send-button {
+            font-size: 16px; /* 设置字体大小 */
+            color: #ffffff; /* 设置字体颜色 */
+            background-color: #4CAF50; /* 设置背景颜色 */
+            border: none; /* 移除边框 */
+            padding: 10px 20px; /* 设置内边距 */
+            text-align: center; /* 文本居中 */
+            text-decoration: none; /* 移除文本装饰 */
+            display: inline-block; /* 使按钮变为行内块元素 */
+            margin-top: 20px;
+            cursor: pointer; /* 鼠标悬停时显示指针 */
+            border-radius: 8px; /* 设置圆角 */
+            transition: background-color 0.3s; /* 设置背景颜色变化的过渡效果 */
+        }
+        #send-button:hover {
+            background-color: #45a049; /* 鼠标悬停时的背景颜色 */
+        }
+        .container {
+            width: 55%; /* Half the width of the screen */
+            height: 100%; /* Full height of the screen */
+            position: absolute; /* Absolute positioning */
+            right: 0; /* Position to the right of the screen */
+            color: black;
+            background-color: black; /* Set background color to black */
+            display:flex;
+        }
+        #canvas2 {
+            position: absolute; /* 使用绝对定位 */
+            right: 0; /* 将canvas定位到容器的右侧 */
+            bottom: 0; /* 将canvas定位到容器的顶部 */
+            background-color: transparent; /* 设置背景颜色为透明 */
+        }
+        #button-container {
+        display: flex;
+        align-items: center; /* 垂直居中对齐 */
+        }
+        #shout-button, #clear-chat, #history-open {
+            background-color: #4CAF50; /* 绿色 */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            padding: 10px;
+            margin-right: 20px; /* 按钮之间的间距 */
+        }
+        #shout-button:hover, #clear-chat:hover, #history-open:hover {
+            background-color: #45a049; /* 深绿色 */
+        }
+        #historyContent {
+            display: none; /* 默认隐藏历史内容 */
+            border: 1px solid #ddd; /* 设置边框 */
+            padding: 15px; /* 设置内边距 */
+            margin-top: 10px; /* 设置上边距 */
+            background-color: #f9f9f9; /* 设置背景颜色 */
+            border-radius: 5px; /* 设置圆角边框 */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* 设置阴影效果 */
+            font-family: Arial, sans-serif; /* 设置字体 */
+            font-size: 16px; /* 设置字体大小 */
+            line-height: 1.6; /* 设置行高 */
+            color: #333; /* 设置文字颜色 */
+            max-width: 600px; /* 设置最大宽度 */
+            margin-left: auto; /* 水平居中 */
+            margin-right: auto; /* 水平居中 */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="navbar" style="position: fixed; top: 0; width: 100%; height: 80px; background-color: #333; display: flex; justify-content: flex-end; align-items: center; z-index: 1000;">
+        <div id="avatar-container" style="position: relative; cursor: pointer;">
+            <img id="user-avatar" src="../static/user_avatar.jpg" alt="User Avatar" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 60px;">
+            <div id="dropdown-menu" style="display: none; position: absolute; right: 0; top: 50px; background-color: #f9f9f9; box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2); z-index: 1001;">
+                <a href="#" id="logout-link" style="display: block; padding: 12px 16px; text-decoration: none; color: black;">退  出</a>
+                <a href="#" id="change-avatar-link" style="display: block; padding: 12px 16px; text-decoration: none; color: black;">修改头像</a>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-container">
+        <div id="chat-history"></div>
+        <div id="historyContent"></div>
+        <div id="button-container" style="display: flex; margin-top: 10px">
+            <button id="shout-button" style="margin-right: 20px; padding: 10px;">语音输入</button>
+            <button id="clear-chat" style="margin-right: 20px; padding: 10px;">清空聊天记录</button>
+            <button id="history-open" style="margin-right: 20px; padding: 10px;">查看聊天记录</button>
+        </div>
+        <textarea id="input-text" placeholder="请输入问题"></textarea>
+        <button id="send-button">发送</button>
+        
+    </div>
+
+    <div class="container"><canvas id="canvas2"></canvas></div>
+    <script type="module" src="/assets/main.js"></script>
+    <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.2/dist/browser/pixi.min.js"></script>
+    <script type="module" crossorigin src="/assets/index-7073af47.js"></script>
+    <script>
+        document.getElementById('send-button').addEventListener('click', function() {
+            var inputText = document.getElementById('input-text').value;
+            console.log(inputText)
+            if (inputText === "quit()") {
+                window.close();
+                return;
+            }
+
+            // 发送请求到后端
+            fetch('/send_message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ input: inputText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                var chatHistory = document.getElementById('chat-history');
+                var userBubble = document.createElement('div');
+                userBubble.classList.add('chat-bubble', 'user-bubble');
+                var userBubbleContent = document.createElement('div');
+                userBubbleContent.classList.add('chat-bubble-content');
+                userBubbleContent.textContent = inputText;
+                userBubble.appendChild(userBubbleContent);
+                var userAvatar = document.createElement('img');
+                userAvatar.src =  '../static/'+userAvatarPath+'/user_avatar.jpg'; // 替换为用户的头像路径
+                userBubble.appendChild(userAvatar);
+                chatHistory.appendChild(userBubble);
+
+                var chatBubble = document.createElement('div');
+                chatBubble.classList.add('chat-bubble', 'gpt-bubble');
+                var gptAvatar = document.createElement('img');
+                gptAvatar.src =  "{{ url_for('static', filename='gpt_avatar.jpg') }}"; // 替换为ChatGPT的头像路径
+                chatBubble.appendChild(gptAvatar);
+                var chatBubbleContent = document.createElement('div');
+                chatBubbleContent.classList.add('chat-bubble-content');
+                chatBubbleContent.textContent = data.response;
+                chatBubble.appendChild(chatBubbleContent);
+                chatHistory.appendChild(chatBubble);
+
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                document.getElementById('input-text').value = ''
+
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    </script>
+    <script>
+        // 新增 Shout 按钮点击事件处理程序
+        document.getElementById('shout-button').addEventListener('click', function() {
+            fetch('/shout', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('input-text').value = data.response;
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    </script>
+    <script>
+        // ...之前的代码...
+    
+        document.getElementById('clear-chat').addEventListener('click', function() {
+            var chatHistory = document.getElementById('chat-history');
+            chatHistory.innerHTML = ''; // 清空聊天历史记录
+        });
+    
+        // ...之前的代码...
+    </script>
+    <script>
+        document.getElementById('history-open').addEventListener('click', function() {
+        // 发送请求到后端以打开文件
+        fetch('/history_open', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ filename: 'F:/AniChat/static/'+userAvatarPath+'/history.txt' })
+            //这边改成本地绝对路径
+        })
+        .then(response => {
+            console.log('./static/'+userAvatarPath+'/history.txt')
+            if (response.ok) {
+                alert('文件已成功打开！');
+            } else {
+                alert('打开文件失败，请检查文件路径或权限。');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('无法打开文件，出现错误。');
+        });
+    });
+    </script>
+    <script>
+        document.getElementById('avatar-container').addEventListener('click', function(event) {
+            var dropdownMenu = document.getElementById('dropdown-menu');
+            dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+            event.stopPropagation();
+        });
+    
+        document.getElementById('logout-link').addEventListener('click', function() {
+            window.close()
+            // 这里可以添加退出登录的逻辑
+            alert('退出登录');
+        });
+    
+        document.getElementById('change-avatar-link').addEventListener('click', function() {
+            // 创建一个文件输入元素
+            var fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'image/*';
+            fileInput.style.display = 'none';
+            document.body.appendChild(fileInput);
+            fileInput.addEventListener('change', function() {
+                console.log('change!')
+                var file = fileInput.files[0];
+                if (file) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        var userAvatar = document.getElementById('user-avatar');
+                        userAvatar.src = e.target.result;
+                    };
+                }
+                var formData = new FormData();
+                formData.append('file', file);
+
+                fetch('http://127.0.0.1:5000/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.text())
+                .then(data => {
+                    console.log(data); // 这里可以处理服务器的响应
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+            });
+            // 触发文件选择
+            fileInput.click();
+        });
+
+        // 点击页面其他地方关闭下拉菜单
+        document.addEventListener('click', function() {
+            var dropdownMenu = document.getElementById('dropdown-menu');
+            dropdownMenu.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
